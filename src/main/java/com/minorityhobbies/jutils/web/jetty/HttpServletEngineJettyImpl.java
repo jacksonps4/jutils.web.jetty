@@ -1,13 +1,26 @@
 package com.minorityhobbies.jutils.web.jetty;
 
 import java.io.IOException;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
+import javax.servlet.DispatcherType;
+import javax.servlet.Filter;
 import javax.servlet.http.HttpServlet;
 
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.nio.SelectChannelConnector;
+import org.eclipse.jetty.servlet.DefaultServlet;
+import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
 
+import com.minorityhobbies.util.web.HttpServletContext;
 import com.minorityhobbies.util.web.HttpServletEngine;
 
 public class HttpServletEngineJettyImpl implements HttpServletEngine {
@@ -26,22 +39,61 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 	private static int DEFAULT_PORT = 9090;
 	private static String ROOT;
 	private Server server;
-	private ServletContextHandler servletContextHandler;
+	private ContextHandlerCollection rootContextHandler;
+	private List<HttpServletContext> contexts;
+	private final Map<String, Filter> rootFilters = new HashMap<String, Filter>();
 	private int port = DEFAULT_PORT;
 	private String root = ROOT;
 
 	public HttpServletEngineJettyImpl() {
 		super();
-		servletContextHandler = new ServletContextHandler();
-		servletContextHandler.setContextPath("/");
-		servletContextHandler.setResourceBase(root);
+		rootContextHandler = new ContextHandlerCollection();
+		contexts = new LinkedList<HttpServletContext>();
 	}
 
 	@Override
 	public void run() {
-		server = new Server(port);
-		server.setHandler(servletContextHandler);
-		
+		server = new Server();
+		SelectChannelConnector connector = new SelectChannelConnector();
+		connector.setPort(port);
+		server.addConnector(connector);
+
+		List<Handler> handlers = new LinkedList<Handler>();
+		for (HttpServletContext context : contexts) {
+			ServletContextHandler contextHandler = new ServletContextHandler();
+			contextHandler.setContextPath(context.getContextPath());
+			for (Map.Entry<String, HttpServlet> servletEntry : context
+					.getServlets().entrySet()) {
+				contextHandler.addServlet(
+						new ServletHolder(servletEntry.getValue()),
+						servletEntry.getKey());
+			}
+			for (Map.Entry<String, Filter> filterEntry : context.getFilters()
+					.entrySet()) {
+				contextHandler.addFilter(
+						new FilterHolder(filterEntry.getValue()),
+						filterEntry.getKey(),
+						EnumSet.allOf(DispatcherType.class));
+			}
+			handlers.add(contextHandler);
+		}
+
+		ServletContextHandler htmlHandler = new ServletContextHandler();
+		htmlHandler.setContextPath("/");
+		for (Map.Entry<String, Filter> filterEntry : rootFilters.entrySet()) {
+			htmlHandler.addFilter(new FilterHolder(filterEntry.getValue()),
+					filterEntry.getKey(), EnumSet.allOf(DispatcherType.class));
+		}
+		ServletHolder htmlHolder = new ServletHolder(new DefaultServlet());
+		htmlHolder.setInitParameter("resourceBase", root);
+		htmlHolder.setInitParameter("dirAllowed", "false");
+		htmlHandler.addServlet(htmlHolder, "/*");
+		handlers.add(htmlHandler);
+
+		rootContextHandler.setHandlers(handlers.toArray(new Handler[handlers
+				.size()]));
+		server.setHandler(rootContextHandler);
+
 		try {
 			server.start();
 			server.join();
@@ -62,9 +114,12 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 	}
 
 	@Override
-	public void addServlet(HttpServlet servlet, String pathSpec) {
-		ServletHolder holder = new ServletHolder(servlet);
-		servletContextHandler.addServlet(holder, pathSpec);
+	public void addContext(HttpServletContext context) {
+		contexts.add(context);
+	}
+
+	public void addRootFilter(Filter filter, String pathSpec) {
+		rootFilters.put(pathSpec, filter);
 	}
 
 	@Override

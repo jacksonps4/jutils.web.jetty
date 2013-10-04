@@ -22,6 +22,7 @@ import org.eclipse.jetty.server.session.SessionHandler;
 import com.minorityhobbies.util.web.HttpRequestHandler;
 import com.minorityhobbies.util.web.HttpServer;
 
+@Deprecated
 public class HttpServerJettyImpl implements HttpServer {
 	static {
 		String portNumber = System.getProperty("com.minorityhobbies.jutils.web.port");
