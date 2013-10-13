@@ -13,8 +13,11 @@ import javax.servlet.http.HttpServlet;
 
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.SessionManager;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.nio.SelectChannelConnector;
+import org.eclipse.jetty.server.session.HashSessionManager;
+import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -39,7 +42,6 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 	private static int DEFAULT_PORT = 9090;
 	private static String ROOT;
 	private Server server;
-	private ContextHandlerCollection rootContextHandler;
 	private List<HttpServletContext> contexts;
 	private final Map<String, Filter> rootFilters = new HashMap<String, Filter>();
 	private int port = DEFAULT_PORT;
@@ -47,7 +49,6 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 
 	public HttpServletEngineJettyImpl() {
 		super();
-		rootContextHandler = new ContextHandlerCollection();
 		contexts = new LinkedList<HttpServletContext>();
 	}
 
@@ -57,6 +58,8 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 		SelectChannelConnector connector = new SelectChannelConnector();
 		connector.setPort(port);
 		server.addConnector(connector);
+
+		SessionManager manager = new HashSessionManager();
 
 		List<Handler> handlers = new LinkedList<Handler>();
 		for (HttpServletContext context : contexts) {
@@ -75,7 +78,9 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 						filterEntry.getKey(),
 						EnumSet.allOf(DispatcherType.class));
 			}
-			handlers.add(contextHandler);
+			SessionHandler sessionHandler = new SessionHandler(manager);
+			sessionHandler.setHandler(contextHandler);
+			handlers.add(sessionHandler);
 		}
 
 		ServletContextHandler htmlHandler = new ServletContextHandler();
@@ -88,10 +93,14 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 		htmlHolder.setInitParameter("resourceBase", root);
 		htmlHolder.setInitParameter("dirAllowed", "false");
 		htmlHandler.addServlet(htmlHolder, "/*");
-		handlers.add(htmlHandler);
-
+		SessionHandler sessionHandler = new SessionHandler(manager);
+		sessionHandler.setHandler(htmlHandler);
+		handlers.add(sessionHandler);
+		
+		ContextHandlerCollection rootContextHandler = new ContextHandlerCollection();
 		rootContextHandler.setHandlers(handlers.toArray(new Handler[handlers
 				.size()]));
+
 		server.setHandler(rootContextHandler);
 
 		try {
