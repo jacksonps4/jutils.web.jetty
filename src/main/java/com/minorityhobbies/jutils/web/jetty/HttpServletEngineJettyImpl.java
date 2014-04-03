@@ -1,5 +1,6 @@
 package com.minorityhobbies.jutils.web.jetty;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -13,7 +14,6 @@ import javax.servlet.http.HttpServlet;
 
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.SessionManager;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.eclipse.jetty.server.session.HashSessionManager;
@@ -37,10 +37,19 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 		if (root != null) {
 			ROOT = root;
 		}
+		String sessionDir = System
+				.getProperty("com.minorityhobbies.jutils.web.session.dir");
+		if (sessionDir != null) {
+			SESSION_DIR = sessionDir;
+		} else {
+			SESSION_DIR = System.getProperty("user.dir");
+		}
 	}
 
 	private static int DEFAULT_PORT = 9090;
 	private static String ROOT;
+	private static String SESSION_DIR;
+
 	private Server server;
 	private List<HttpServletContext> contexts;
 	private final Map<String, Filter> rootFilters = new HashMap<String, Filter>();
@@ -59,7 +68,13 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 		connector.setPort(port);
 		server.addConnector(connector);
 
-		SessionManager manager = new HashSessionManager();
+		HashSessionManager manager = new HashSessionManager();
+		try {
+			manager.setStoreDirectory(new File(SESSION_DIR));
+		} catch (IOException e) {
+			throw new RuntimeException("Session directory not found: "
+					+ SESSION_DIR);
+		}
 
 		List<Handler> handlers = new LinkedList<Handler>();
 		for (HttpServletContext context : contexts) {
@@ -96,7 +111,7 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 		SessionHandler sessionHandler = new SessionHandler(manager);
 		sessionHandler.setHandler(htmlHandler);
 		handlers.add(sessionHandler);
-		
+
 		ContextHandlerCollection rootContextHandler = new ContextHandlerCollection();
 		rootContextHandler.setHandlers(handlers.toArray(new Handler[handlers
 				.size()]));
