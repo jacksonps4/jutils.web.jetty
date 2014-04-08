@@ -70,8 +70,13 @@ public class HttpServletEngineJettyImpl implements HttpServletEngine {
 
 		HashSessionManager manager = new HashSessionManager();
 		try {
-			manager.setStoreDirectory(new File(SESSION_DIR));
-			manager.setIdleSavePeriod(60);
+			File sessionDir = new File(SESSION_DIR);
+			if (sessionDir.exists()) {
+				if (sessionDir.mkdirs()) {
+					manager.setStoreDirectory(sessionDir);
+					manager.setIdleSavePeriod(60);
+				}
+			}
 		} catch (IOException e) {
 			throw new RuntimeException("Session directory not found: "
 					+ SESSION_DIR);
